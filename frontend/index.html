@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LensFlow — AI Order Management</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">
+      <span class="lens lens-a"></span>
+      <span class="lens lens-b"></span>
+    </div>
+    <h1>Lens<span>Flow</span></h1>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-view="intake">Order &amp; Inventory</button>
+    <button class="tab" data-view="dashboard">Dashboard</button>
+    <button class="tab" data-view="alerts">TAT Alerts</button>
+  </div>
+  <div class="api-status" id="api-status">
+    <span class="dot-status"></span><span id="api-status-text">Connecting…</span>
+  </div>
+</div>
+
+<main>
+
+  <!-- ============ VIEW 1: INTAKE / INVENTORY ============ -->
+  <section class="view active" id="view-intake">
+    <h2 class="section-title">Order Intake &amp; Power Availability</h2>
+    <p class="section-sub">Enter the prescription and lens spec for a new order. LensFlow checks live in-house stock and tells you instantly whether it ships from local stock or needs to be lab-ordered — with an estimated delivery time based on lens-type SLA.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>New Order</h3>
+        <div class="form-row">
+          <div>
+            <label>Customer Name</label>
+            <input id="f-name" value="Ananya Rao" />
+          </div>
+          <div>
+            <label>Source</label>
+            <select id="f-source">
+              <option>Store Walk-in</option>
+              <option>Website</option>
+              <option>App</option>
+              <option>Marketplace</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Store / Location</label>
+            <select id="f-store"></select>
+          </div>
+          <div>
+            <label>Lens Type</label>
+            <select id="f-lenstype"></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Sphere Power (e.g. -2.50)</label>
+            <input id="f-sphere" type="number" step="0.25" value="-2.00" />
+          </div>
+          <div>
+            <label>Cylinder (e.g. -0.75)</label>
+            <input id="f-cyl" type="number" step="0.25" value="0" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Lens Index</label>
+            <select id="f-index">
+              <option>1.56</option>
+              <option>1.59</option>
+              <option>1.67</option>
+              <option>1.74</option>
+            </select>
+          </div>
+          <div>
+            <label>Coating</label>
+            <select id="f-coating">
+              <option>Anti-Reflective</option>
+              <option>Blue Cut</option>
+              <option>Photochromic</option>
+              <option>UC (Uncoated)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row full">
+          <div>
+            <label>Frame</label>
+            <input id="f-frame" value="Ray-Ban RB2132 — Black, 52mm" />
+          </div>
+        </div>
+        <button class="primary" id="submit-order">Check Availability &amp; Place Order</button>
+
+        <div id="availability-result"></div>
+      </div>
+
+      <div class="card">
+        <h3>In-House Inventory Snapshot</h3>
+        <p class="section-sub" style="margin-bottom:10px;">Stock levels derived from rolling 90-day dispatch history. Common power / coating combos are pre-stocked; rare combinations are made-to-order.</p>
+        <table class="inv-table" id="inv-table">
+          <thead><tr><th>Lens Type</th><th>Power Range</th><th>Index</th><th>Coating</th><th>Stock</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ VIEW 2: DASHBOARD ============ -->
+  <section class="view" id="view-dashboard">
+    <h2 class="section-title">Live Order Dashboard</h2>
+    <p class="section-sub">Every order across the fulfilment lifecycle — Order Placed → Power Check → Lab Processing → Coating → QC → Dispatch → Delivered. QC failures loop the order back to Lab Processing. SLA countdown is per lens-type.</p>
+
+    <div class="kpi-row" id="kpi-row"></div>
+
+    <div class="filters">
+      <select id="filter-status"><option value="">All Statuses</option></select>
+      <select id="filter-lens"><option value="">All Lens Types</option></select>
+      <select id="filter-store"><option value="">All Locations</option></select>
+      <input id="filter-search" placeholder="Search order ID / customer..." />
+      <button class="ghost" id="reset-filters">Reset</button>
+      <button class="ghost" id="refresh-orders">⟲ Refresh</button>
+    </div>
+
+    <div class="orders-table-wrap">
+      <table class="orders">
+        <thead>
+          <tr>
+            <th>Order ID</th><th>Customer</th><th>Location</th><th>Lens Type</th>
+            <th>Status</th><th>SLA Status</th><th>Time Left</th><th>Delay Reason</th><th>Update</th>
+          </tr>
+        </thead>
+        <tbody id="orders-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ VIEW 3: ALERTS ============ -->
+  <section class="view" id="view-alerts">
+    <h2 class="section-title">TAT Breach Prediction &amp; Alerts</h2>
+    <p class="section-sub">A risk model scores every active order by comparing elapsed time + current stage against historical stage durations for that lens type. Orders crossing the risk threshold trigger an Email/WhatsApp alert to the assigned team before the SLA actually breaches.</p>
+
+    <div class="card" style="margin-bottom:20px;">
+      <h3>Risk Model Summary</h3>
+      <p style="font-size:13px; line-height:1.8; color:var(--muted);">
+        For each active order, predicted completion = elapsed time + average remaining-stage durations (from historical run-rate per lens type).
+        If predicted completion exceeds the SLA deadline → <strong style="color:var(--rose)">Breach Alert</strong>.
+        If predicted completion is within 80% of the SLA deadline → <strong style="color:var(--amber)">At-Risk Alert</strong>.
+        Alerts are pushed to the store team via Email and WhatsApp simultaneously.
+      </p>
+    </div>
+
+    <div class="alert-list" id="alert-list"></div>
+  </section>
+
+</main>
+
+<footer>LensFlow — Order Intelligence Layer · Frontend (static) + Backend (Node/Express API)</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
